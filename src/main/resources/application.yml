@@ -2,23 +2,9 @@ server:
   port: 8080
 
 spring:
-  ai:
-    openai:
-      api-key: ${DEEPSEEK_API_KEY:sk-your-key-here}
-      base-url: https://api.deepseek.com
-      chat:
-        options:
-          model: deepseek-chat
-          temperature: 0.7
-      embedding:
-        options:
-          model: deepseek-embedding
-
-  # SQLite数据源
   datasource:
     url: jdbc:sqlite:./data/rag.db
     driver-class-name: org.sqlite.JDBC
 
-# 文档目录
 rag:
   docs-dir: ./docs

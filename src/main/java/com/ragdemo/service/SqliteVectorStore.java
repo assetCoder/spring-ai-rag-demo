@@ -1,27 +1,31 @@
 package com.ragdemo.service;
 
-import org.springframework.ai.embedding.EmbeddingClient;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.document.Document;
+import dev.langchain4j.data.document.Document;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.store.embedding.EmbeddingMatch;
+import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.store.embedding.CosineSimilarity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 基于SQLite的轻量向量存储
- * 文档 → 向量化 → SQLite持久化 → 余弦相似度检索
+ * 基于SQLite + 内存的轻量向量存储
+ * 文档向量持久化在SQLite，检索时加载到内存计算相似度
  */
 @Service
-public class SqliteVectorStore implements VectorStore {
+public class SqliteVectorStore implements EmbeddingStore<TextSegment> {
 
-    private final EmbeddingClient embeddingClient;
+    private final EmbeddingModel embeddingModel;
     private final JdbcTemplate jdbc;
 
-    public SqliteVectorStore(EmbeddingClient embeddingClient, JdbcTemplate jdbc) {
-        this.embeddingClient = embeddingClient;
+    public SqliteVectorStore(EmbeddingModel embeddingModel, JdbcTemplate jdbc) {
+        this.embeddingModel = embeddingModel;
         this.jdbc = jdbc;
         initTable();
     }
@@ -32,86 +36,88 @@ public class SqliteVectorStore implements VectorStore {
                 id TEXT PRIMARY KEY,
                 content TEXT NOT NULL,
                 embedding BLOB,
-                metadata TEXT DEFAULT '{}',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """);
-        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_vs_created ON vector_store(created_at)");
     }
 
     @Override
-    public void add(List<Document> documents) {
-        for (var doc : documents) {
-            var embedding = embeddingClient.embed(doc);
-            var id = doc.getId() != null ? doc.getId() : UUID.randomUUID().toString();
-            jdbc.update(
-                "INSERT OR REPLACE INTO vector_store (id, content, embedding, metadata) VALUES (?, ?, ?, ?)",
-                id, doc.getContent(), serializeEmbedding(embedding), doc.getMetadata().toString());
-        }
+    public String add(Embedding embedding) {
+        var id = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO vector_store (id, content, embedding) VALUES (?, '', ?)",
+                id, serialize(embedding));
+        return id;
     }
 
     @Override
-    public Optional<Boolean> delete(List<String> ids) {
-        for (var id : ids) {
-            jdbc.update("DELETE FROM vector_store WHERE id = ?", id);
-        }
-        return Optional.of(true);
+    public void add(String id, Embedding embedding) {
+        jdbc.update("INSERT OR REPLACE INTO vector_store (id, content, embedding) VALUES (?, '', ?)",
+                id, serialize(embedding));
     }
 
     @Override
-    public List<Document> similaritySearch(SearchRequest request) {
-        var query = request.getQuery();
-        var topK = request.getTopK();
-        var queryEmbedding = embeddingClient.embed(query);
+    public void add(String id, Embedding embedding, TextSegment textSegment) {
+        var content = textSegment != null ? textSegment.text() : "";
+        jdbc.update("INSERT OR REPLACE INTO vector_store (id, content, embedding) VALUES (?, ?, ?)",
+                id, content, serialize(embedding));
+    }
 
-        var rows = jdbc.queryForList("SELECT id, content, embedding, metadata FROM vector_store");
+    @Override
+    public List<EmbeddingMatch<TextSegment>> findRelevant(int maxResults, Embedding reference) {
+        var rows = jdbc.queryForList("SELECT id, content, embedding FROM vector_store");
         if (rows.isEmpty()) return List.of();
 
-        var scored = new ArrayList<ScoredDoc>();
+        var scored = new ArrayList<ScoredMatch>();
         for (var row : rows) {
-            var docEmbedding = deserializeEmbedding((byte[]) row.get("embedding"));
-            var score = cosineSimilarity(queryEmbedding, docEmbedding);
-            scored.add(new ScoredDoc(
-                (String) row.get("id"),
-                (String) row.get("content"),
-                (String) row.get("metadata"),
-                score
-            ));
+            var emb = deserialize((byte[]) row.get("embedding"));
+            var score = CosineSimilarity.between(reference, emb);
+            var segment = new TextSegment((String) row.get("content"));
+            scored.add(new ScoredMatch((String) row.get("id"), score, segment, emb));
         }
 
-        scored.sort((a, b) -> Float.compare(b.score, a.score));
+        scored.sort((a, b) -> Double.compare(b.score, a.score));
         return scored.stream()
-            .limit(topK)
-            .map(s -> {
-                var doc = new Document(s.id, s.content);
-                return doc;
-            })
-            .collect(Collectors.toList());
+                .limit(maxResults)
+                .map(s -> new EmbeddingMatch<>(s.score, s.id, s.embedding, s.segment))
+                .collect(Collectors.toList());
     }
 
-    private float cosineSimilarity(List<Double> a, List<Double> b) {
-        if (a.size() != b.size()) return 0;
-        double dot = 0, na = 0, nb = 0;
-        for (int i = 0; i < a.size(); i++) {
-            dot += a.get(i) * b.get(i);
-            na += a.get(i) * a.get(i);
-            nb += b.get(i) * b.get(i);
+    // --- 文档存储辅助方法 ---
+
+    public void storeDocument(String content) {
+        var embedding = embeddingModel.embed(content).content();
+        var id = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO vector_store (id, content, embedding) VALUES (?, ?, ?)",
+                id, content, serialize(embedding));
+    }
+
+    public List<String> searchSimilar(String query, int topK) {
+        var queryEmb = embeddingModel.embed(query).content();
+        var matches = findRelevant(topK, queryEmb);
+        return matches.stream()
+                .map(m -> m.embedded().text())
+                .collect(Collectors.toList());
+    }
+
+    // --- 序列化辅助 ---
+
+    private byte[] serialize(Embedding embedding) {
+        var vec = embedding.vector();
+        var bb = ByteBuffer.allocate(vec.length() * 4);
+        for (int i = 0; i < vec.length(); i++) {
+            bb.putFloat(vec.getFloat(i));
         }
-        return (float) (dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-10));
-    }
-
-    private byte[] serializeEmbedding(List<Double> embedding) {
-        var bb = java.nio.ByteBuffer.allocate(embedding.size() * 8);
-        for (var v : embedding) bb.putDouble(v);
         return bb.array();
     }
 
-    private List<Double> deserializeEmbedding(byte[] bytes) {
-        var bb = java.nio.ByteBuffer.wrap(bytes);
-        var list = new ArrayList<Double>();
-        while (bb.hasRemaining()) list.add(bb.getDouble());
-        return list;
+    private Embedding deserialize(byte[] bytes) {
+        var bb = ByteBuffer.wrap(bytes);
+        var floats = new float[bb.capacity() / 4];
+        for (int i = 0; i < floats.length; i++) {
+            floats[i] = bb.getFloat();
+        }
+        return new Embedding(floats);
     }
 
-    private record ScoredDoc(String id, String content, String metadata, float score) {}
+    private record ScoredMatch(String id, double score, TextSegment segment, Embedding embedding) {}
 }
