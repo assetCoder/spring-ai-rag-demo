@@ -1,5 +1,6 @@
 package com.ragdemo.service;
 
+import com.ragdemo.agent.SearchTools;
 import com.ragdemo.agent.*;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import org.springframework.stereotype.Component;
@@ -18,9 +19,9 @@ public class AgentRegistry {
     private SearchAgent searchAgent;
     private ChatAgent chatAgent;
 
-    public AgentRegistry(ChatLanguageModel chatModel, SearchTools searchTools) {
+    public AgentRegistry(ChatLanguageModel chatModel) {
         this.chatModel = chatModel;
-        this.searchTools = searchTools;
+        this.searchTools = new SearchTools();
         init();
     }
 
