@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring AI RAG Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font: 14px/1.6 -apple-system, sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+        h1 { font-size: 24px; color: #00d4aa; margin-bottom: 8px; }
+        .subtitle { color: #666; margin-bottom: 30px; }
+        .card { background: #14141f; border: 1px solid #1e1e30; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        label { display: block; color: #888; margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        textarea, input[type="file"] { width: 100%; padding: 12px; border: 1px solid #1e1e30; border-radius: 8px; background: #0d0d15; color: #e0e0e0; font-size: 14px; transition: border .2s; }
+        textarea:focus { outline: none; border-color: #00d4aa; }
+        textarea { min-height: 80px; resize: vertical; }
+        button { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; transition: all .2s; }
+        .btn-primary { background: #00d4aa; color: #0a0a0f; font-weight: 600; }
+        .btn-primary:hover { background: #00e6b8; }
+        .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+        .actions { display: flex; gap: 12px; margin-top: 16px; }
+        .response { margin-top: 12px; padding: 16px; background: #0d0d15; border: 1px solid #1e1e30; border-radius: 8px; white-space: pre-wrap; display: none; }
+        .status { font-size: 12px; color: #666; margin-top: 8px; }
+        .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #1e1e30; border-top-color: #00d4aa; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; margin-right: 8px; display: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .upload-zone { border: 2px dashed #1e1e30; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: border .2s; }
+        .upload-zone:hover { border-color: #00d4aa; }
+        .upload-zone .icon { font-size: 40px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🧠 RAG Demo</h1>
+    <p class="subtitle">基于 Spring AI 的知识库问答系统</p>
+
+    <div class="card">
+        <label>📄 上传知识文档</label>
+        <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+            <div class="icon">📁</div>
+            <p>点击上传 .txt / .md 文件</p>
+            <p class="status">支持技术文档、知识库等</p>
+        </div>
+        <input type="file" id="fileInput" accept=".txt,.md" style="display:none" onchange="uploadFile(this)">
+        <div class="status" id="uploadStatus"></div>
+    </div>
+
+    <div class="card">
+        <label>💬 提问</label>
+        <textarea id="question" placeholder="输入你的问题..." onkeydown="if(event.key==='Enter'&&!event.shiftKey)ask()"></textarea>
+        <div class="actions">
+            <button class="btn-primary" onclick="ask()" id="askBtn">
+                <span class="loading" id="loading"></span>提问
+            </button>
+        </div>
+        <div class="response" id="response"></div>
+    </div>
+</div>
+
+<script>
+async function ask() {
+    var q = document.getElementById('question').value.trim();
+    if (!q) return;
+    var btn = document.getElementById('askBtn');
+    var loading = document.getElementById('loading');
+    var resp = document.getElementById('response');
+    btn.disabled = true;
+    loading.style.display = 'inline-block';
+    resp.style.display = 'block';
+    resp.textContent = '思考中...';
+    try {
+        var r = await fetch('/api/rag/ask', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({question: q})
+        });
+        var d = await r.json();
+        resp.textContent = d.answer || d.error || '无响应';
+    } catch(e) {
+        resp.textContent = '请求失败: ' + e.message;
+    }
+    btn.disabled = false;
+    loading.style.display = 'none';
+}
+
+async function uploadFile(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var status = document.getElementById('uploadStatus');
+    status.textContent = '上传中...';
+    var fd = new FormData();
+    fd.append('file', file);
+    try {
+        var r = await fetch('/api/rag/upload', {method: 'POST', body: fd});
+        var d = await r.json();
+        status.textContent = d.message || d.error || '上传成功';
+    } catch(e) {
+        status.textContent = '上传失败: ' + e.message;
+    }
+    input.value = '';
+}
+</script>
+</body>
+</html>

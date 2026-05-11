@@ -1,0 +1,19 @@
+server:
+  port: 8080
+
+spring:
+  ai:
+    openai:
+      api-key: ${DEEPSEEK_API_KEY:sk-your-key-here}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.3
+      embedding:
+        options:
+          model: deepseek-embedding
+
+# 文档目录
+rag:
+  docs-dir: ./docs
