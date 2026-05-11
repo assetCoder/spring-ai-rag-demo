@@ -19,8 +19,7 @@ public class DocumentService {
         this.vectorStore = vectorStore;
     }
 
-    public void uploadDocument(MultipartFile file) throws IOException {
-        var content = new String(file.getBytes());
+    public void uploadDocument(String content) {
         vectorStore.storeDocument(content);
     }
 
