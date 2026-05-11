@@ -1,5 +1,7 @@
 package com.ragdemo.agent;
 
+import com.ragdemo.service.SqliteVectorStore;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 
 /**
@@ -7,9 +9,20 @@ import dev.langchain4j.agent.tool.Tool;
  */
 public class SearchTools {
 
-    @Tool("从知识库中检索相关文档")
-    public String searchDocs(String query) {
-        return "知识库检索功能需要部署后上传文档使用。当前可回答问题。";
+    private final SqliteVectorStore vectorStore;
+
+    public SearchTools(SqliteVectorStore vectorStore) {
+        this.vectorStore = vectorStore;
+    }
+
+    @Tool("从知识库中根据关键词检索相关文档内容")
+    public String searchDocs(@P("搜索关键词") String query) {
+        if (vectorStore == null) return "知识库未初始化";
+        var results = vectorStore.searchSimilar(query, 3);
+        if (results.isEmpty()) {
+            return "未找到相关文档";
+        }
+        return String.join("\n---\n", results);
     }
 
     @Tool("获取当前时间")
@@ -18,7 +31,7 @@ public class SearchTools {
     }
 
     @Tool("计算数学表达式")
-    public String calculate(String expression) {
+    public String calculate(@P("数学表达式，如 1+2*3") String expression) {
         if (!expression.matches("[0-9+\\-*/.()% ]+")) {
             return "不支持的表达式";
         }

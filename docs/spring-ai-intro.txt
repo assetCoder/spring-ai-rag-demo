@@ -1,0 +1,4 @@
+Spring AI 是一个用于集成人工智能功能的Spring框架模块。
+它提供了与各种AI提供商（如OpenAI、Anthropic、DeepSeek）的集成。
+主要功能包括：AI对话、文本生成、文档向量化、RAG检索增强生成。
+RAG（Retrieval-Augmented Generation）是一种将检索与生成相结合的AI技术。

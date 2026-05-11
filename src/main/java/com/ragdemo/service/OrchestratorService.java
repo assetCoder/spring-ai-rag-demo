@@ -22,19 +22,28 @@ public class OrchestratorService {
         this.orchestrator = OrchestratorAgent.create(registry.chatModel());
     }
 
-    /**
-     * 入口方法：自动路由到合适的Agent
-     */
     public String process(String message) {
         // 1. 路由判断
-        String intent = orchestrator.route(message);
+        String intent;
+        try {
+            intent = orchestrator.route(message);
+        } catch (Exception e) {
+            intent = "对话";
+        }
 
-        // 2. 派发到对应Agent
+        // 2. 派发
         return switch (intent) {
             case "客服" -> registry.customerServiceAgent().chat(message);
             case "分析" -> registry.analysisAgent().analyze(message);
             case "搜索" -> registry.searchAgent().search(message);
             default -> registry.chatAgent().chat(message);
         };
+    }
+
+    /**
+     * 直接使用搜索Agent查询知识库（RAG专用入口）
+     */
+    public String searchKnowledge(String query) {
+        return registry.searchAgent().search(query);
     }
 }

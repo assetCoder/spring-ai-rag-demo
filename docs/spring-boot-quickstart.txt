@@ -1,0 +1,5 @@
+Spring Boot 是一个用于创建独立、生产级Spring应用的框架。
+特点：自动配置、嵌入式服务器、生产就绪功能。
+使用spring-boot-starter-parent作为父POM。
+可以使用@SpringBootApplication注解启动应用。
+配置文件支持application.yml和application.properties。

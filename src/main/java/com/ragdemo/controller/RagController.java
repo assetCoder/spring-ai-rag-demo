@@ -23,8 +23,16 @@ public class RagController {
             return ResponseEntity.badRequest().body(Map.of("error", "请选择文件"));
         }
         try {
-            documentService.uploadDocument(file);
-            return ResponseEntity.ok(Map.of("message", "文档上传成功: " + file.getOriginalFilename()));
+            // 读取文件内容
+            var content = new String(file.getBytes());
+
+            // 分行存储，每行作为一个文档块，便于检索
+            documentService.uploadDocument(content);
+
+            return ResponseEntity.ok(Map.of(
+                "message", "文档上传成功: " + file.getOriginalFilename(),
+                "size", content.length() + " 字符"
+            ));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
