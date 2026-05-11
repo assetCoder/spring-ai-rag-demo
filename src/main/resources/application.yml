@@ -9,10 +9,15 @@ spring:
       chat:
         options:
           model: deepseek-chat
-          temperature: 0.3
+          temperature: 0.7
       embedding:
         options:
           model: deepseek-embedding
+
+  # SQLite数据源
+  datasource:
+    url: jdbc:sqlite:./data/rag.db
+    driver-class-name: org.sqlite.JDBC
 
 # 文档目录
 rag:
