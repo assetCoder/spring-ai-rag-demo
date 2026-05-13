@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * 统一聊天入口
+ * 统一聊天入口 - 支持工作流
  */
 @RestController
 @RequestMapping("/api")
@@ -26,10 +26,19 @@ public class ChatController {
         }
 
         try {
-            var reply = orchestrator.process(message);
-            return Map.of("reply", reply, "agent", "auto");
+            var result = orchestrator.process(message);
+            return Map.of(
+                    "reply", result.reply(),
+                    "workflow", result.steps().stream()
+                            .map(s -> Map.of(
+                                    "agent", s.agent(),
+                                    "input", s.input(),
+                                    "elapsedMs", s.elapsedMs()
+                            ))
+                            .toList()
+            );
         } catch (Exception e) {
-            return Map.of("reply", "处理出错: " + e.getMessage(), "agent", "error");
+            return Map.of("reply", "处理出错: " + e.getMessage(), "error", true);
         }
     }
 
@@ -42,7 +51,7 @@ public class ChatController {
 
         try {
             var reply = orchestrator.searchKnowledge(question);
-            return Map.of("answer", reply);
+            return Map.of("answer", reply, "agent", "搜索");
         } catch (Exception e) {
             return Map.of("error", "查询出错: " + e.getMessage());
         }
