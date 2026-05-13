@@ -181,9 +181,9 @@ src/main/java/com/ragdemo/
 - [x] 向量嵌入 + 文档自动分块（DeepSeek Embedding + Chunker）
 - [x] JSON持久化（重启不丢失）
 - [x] Web管理界面
+- [x] Agent工作流编排（多步串行执行 + 结果传递）
+- [x] 多轮对话记忆管理（滑动窗口，保留10条）
 - [ ] 流式输出（SSE/WebSocket）
-- [ ] 多轮对话记忆管理
-- [ ] Agent间协作流程
 
 ## 📄 License
 
