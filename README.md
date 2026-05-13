@@ -2,7 +2,7 @@
 
 基于 **LangChain4j** + **Spring Boot 3** + **DeepSeek** 的多Agent检索增强生成（RAG）系统。
 
-> ⚡ 轻量级 | 零外部依赖 | 单JAR部署 | SQLite持久化
+> ⚡ 轻量级 | 零外部依赖 | 单JAR部署 | 语义向量搜索
 
 ## 🏗️ 系统架构
 
@@ -20,7 +20,8 @@
      (知识库检索 / 计算 / 时间)
                   │
                   ▼
-           SQLite 持久化存储
+           InMemoryEmbeddingStore
+           (JSON持久化 / 语义搜索)
 ```
 
 ## ✨ 核心特性
@@ -32,11 +33,11 @@
 - **搜索Agent** - SQLite知识库检索（RAG）
 - **对话Agent** - 通用聊天、日常对话
 
-### 📚 RAG知识库
-- 上传文档（.txt / .md）→ SQLite持久化存储
-- 关键词检索匹配
-- 自动加载启动目录下的文档
-- 支持运行时动态上传
+### 📚 RAG知识库（语义搜索）
+- 上传文档 → 自动分块 → DeepSeek Embedding 向量化 → 存入向量库
+- 语义检索（余弦相似度），理解"意思相近"而非"关键词匹配"
+- JSON文件持久化，重启不丢失
+- 支持运行时动态上传 + 启动时自动加载 docs/ 目录
 
 ### 🛠️ 工具调用
 - 知识库检索（searchDocs）
@@ -127,7 +128,7 @@ Content-Type: application/json
 
 | 存储 | 位置 | 说明 |
 |------|------|------|
-| 向量库 | `./data/rag.db` | SQLite，持久化文档内容 |
+| 向量库 | `./data/vector-store.json` | InMemoryEmbeddingStore 序列化，重启恢复 |
 | 文档源 | `./docs/` | 启动时自动加载 .txt / .md |
 | 日志 | 控制台 | Spring Boot默认日志 |
 
@@ -137,9 +138,10 @@ Content-Type: application/json
 |------|------|------|
 | 核心框架 | LangChain4j | 0.35.0 |
 | LLM | DeepSeek Chat | deepseek-chat |
+| 嵌入模型 | DeepSeek Embedding | deepseek-embedding |
 | 后端框架 | Spring Boot | 3.2.5 |
 | 语言 | Java | 17 |
-| 数据库 | SQLite | 3.45.1 |
+| 向量库 | InMemoryEmbeddingStore | JSON文件持久化 |
 | 前端 | Thymeleaf + 原生JS | - |
 | 构建 | Maven | - |
 
@@ -165,21 +167,21 @@ src/main/java/com/ragdemo/
 └── service/
     ├── AgentRegistry.java            # Agent注册中心
     ├── OrchestratorService.java      # 编排服务
-    ├── DocumentService.java          # 文档管理
-    ├── SqliteVectorStore.java        # SQLite向量库
+    ├── DocumentService.java          # 文档管理（分块+嵌入+存入）
+    ├── VectorStore.java              # 向量库（语义搜索+JSON持久化）
+    ├── Chunker.java                  # 文档分块工具
     └── AppInitializer.java           # 初始化
 ```
 
 ## 🚀 路线图
 
 - [x] 多Agent路由架构
-- [x] RAG知识库（关键字检索）
+- [x] RAG知识库（向量语义搜索）
 - [x] 工具调用（计算/时间/检索）
-- [x] SQLite持久化存储
+- [x] 向量嵌入 + 文档自动分块（DeepSeek Embedding + Chunker）
+- [x] JSON持久化（重启不丢失）
 - [x] Web管理界面
-- [ ] 真正向量嵌入检索（OpenAI/BGE）
 - [ ] 流式输出（SSE/WebSocket）
-- [ ] 文档自动分块（Chunking）
 - [ ] 多轮对话记忆管理
 - [ ] Agent间协作流程
 

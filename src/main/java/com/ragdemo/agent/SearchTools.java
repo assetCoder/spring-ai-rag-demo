@@ -1,6 +1,6 @@
 package com.ragdemo.agent;
 
-import com.ragdemo.service.SqliteVectorStore;
+import com.ragdemo.service.VectorStore;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 
@@ -9,20 +9,24 @@ import dev.langchain4j.agent.tool.Tool;
  */
 public class SearchTools {
 
-    private final SqliteVectorStore vectorStore;
+    private final VectorStore vectorStore;
 
-    public SearchTools(SqliteVectorStore vectorStore) {
+    public SearchTools(VectorStore vectorStore) {
         this.vectorStore = vectorStore;
     }
 
-    @Tool("从知识库中根据关键词检索相关文档内容")
-    public String searchDocs(@P("搜索关键词") String query) {
-        if (vectorStore == null) return "知识库未初始化";
+    @Tool("从知识库中根据语义搜索相关文档内容")
+    public String searchDocs(@P("搜索关键词或问题") String query) {
         var results = vectorStore.searchSimilar(query, 3);
         if (results.isEmpty()) {
             return "未找到相关文档";
         }
-        return String.join("\n---\n", results);
+        var sb = new StringBuilder();
+        for (int i = 0; i < results.size(); i++) {
+            sb.append("【结果").append(i + 1).append("】\n");
+            sb.append(results.get(i)).append("\n\n");
+        }
+        return sb.toString().trim();
     }
 
     @Tool("获取当前时间")

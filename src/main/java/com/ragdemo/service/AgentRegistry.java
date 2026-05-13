@@ -11,20 +11,19 @@ import org.springframework.stereotype.Component;
 public class AgentRegistry {
 
     private final ChatLanguageModel chatModel;
-    private final SearchTools searchTools;
 
     private CustomerServiceAgent customerServiceAgent;
     private AnalysisAgent analysisAgent;
     private SearchAgent searchAgent;
     private ChatAgent chatAgent;
 
-    public AgentRegistry(ChatLanguageModel chatModel, SqliteVectorStore vectorStore) {
+    public AgentRegistry(ChatLanguageModel chatModel, VectorStore vectorStore) {
         this.chatModel = chatModel;
-        this.searchTools = new SearchTools(vectorStore);
-        init();
+        var searchTools = new SearchTools(vectorStore);
+        init(searchTools);
     }
 
-    private void init() {
+    private void init(SearchTools searchTools) {
         this.customerServiceAgent = CustomerServiceAgent.create(chatModel, searchTools);
         this.analysisAgent = AnalysisAgent.create(chatModel);
         this.searchAgent = SearchAgent.create(chatModel, searchTools);

@@ -1,10 +1,6 @@
 server:
   port: 8080
 
-spring:
-  datasource:
-    url: jdbc:sqlite:./data/rag.db
-    driver-class-name: org.sqlite.JDBC
-
 rag:
   docs-dir: ./docs
+  store-path: ./data/vector-store.json
