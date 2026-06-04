@@ -2,26 +2,32 @@
 
 基于 **LangChain4j** + **Spring Boot 3** + **DeepSeek** 的多Agent检索增强生成（RAG）系统。
 
-> ⚡ 轻量级 | 零外部依赖 | 单JAR部署 | 语义向量搜索
+> ⚡ 轻量级 | 零外部依赖 | 单JAR部署 | 语义向量搜索 | 多模态
 
 ## 🏗️ 系统架构
 
 ```
-用户输入 ──→ OrchestratorAgent (智能路由)
-                  │
-       ┌──────────┼──────────────┐
-       ▼          ▼              ▼
-  客服Agent   分析Agent       搜索Agent     对话Agent
-  (FAQ/咨询)  (数据分析/报告)  (知识库RAG)   (通用对话)
-       │          │              │
-       └──────────┼──────────────┘
-                  ▼
-            SearchTools
-     (知识库检索 / 计算 / 时间)
-                  │
-                  ▼
-           InMemoryEmbeddingStore
-           (JSON持久化 / 语义搜索)
+用户 ──→ Telegram Bot ──→ OrchestratorAgent (智能路由)
+                              │
+                   ┌──────────┼──────────────┐
+                   ▼          ▼              ▼
+              客服Agent   分析Agent       搜索Agent     对话Agent
+              (FAQ/咨询)  (数据分析/报告)  (知识库RAG)   (通用对话)
+                   │          │              │
+                   └──────────┼──────────────┘
+                              ▼
+                        SearchTools
+                 (知识库检索 / 计算 / 时间)
+                              │
+                              ▼
+                       InMemoryEmbeddingStore
+                       (JSON持久化 / 语义搜索)
+
+  ──── 多模态扩展 ────
+
+  图片 ──→ VisionService (Qwen-VL) ──→ 图片理解
+  语音 ──→ SpeechService (FunASR + CosyVoice) ──→ 语音对话
+  "画..." ──→ ImageGenerationService (Qwen-Image) ──→ 图片生成
 ```
 
 ## ✨ 核心特性
@@ -30,14 +36,19 @@
 - **OrchestratorAgent** - 自动识别用户意图，分发到最合适的Agent
 - **客服Agent** - 产品咨询、FAQ、帮助问答
 - **分析Agent** - 数据分析、报告生成、趋势洞察
-- **搜索Agent** - SQLite知识库检索（RAG）
+- **搜索Agent** - 知识库检索（RAG）
 - **对话Agent** - 通用聊天、日常对话
 
 ### 📚 RAG知识库（语义搜索）
-- 上传文档 → 自动分块 → DeepSeek Embedding 向量化 → 存入向量库
+- 上传文档 → 自动分块 → 本地嵌入向量化 → 语义搜索
 - 语义检索（余弦相似度），理解"意思相近"而非"关键词匹配"
 - JSON文件持久化，重启不丢失
 - 支持运行时动态上传 + 启动时自动加载 docs/ 目录
+
+### 🖼️ 多模态能力
+- **图片理解** - 发图给 Bot，自动分析图片内容（Qwen-VL）
+- **图片生成** - 说"画一张..."，AI 生成图片（Qwen-Image 2.0 Pro）
+- **语音对话** - 发语音消息，自动转文字→AI回复→语音回复（FunASR + CosyVoice）
 
 ### 🛠️ 工具调用
 - 知识库检索（searchDocs）
@@ -49,7 +60,8 @@
 ### 前置条件
 - **Java 17+**
 - **Maven 3.8+**
-- **DeepSeek API Key**（[获取Key](https://platform.deepseek.com/api_keys)）
+- **DeepSeek API Key**（[获取Key](https://platform.deepseek.com/api_keys)）- 文字对话
+- **阿里云百炼 API Key**（[获取Key](https://bailian.console.aliyun.com/)） - 多模态（可选）
 
 ### 一键运行
 
@@ -58,13 +70,12 @@
 git clone https://github.com/assetCoder/spring-ai-rag-demo.git
 cd spring-ai-rag-demo
 
-# 2. 配置API Key
+# 2. 配置环境变量
 export DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+export QWEN_API_KEY=sk-your-aliyun-bailian-key    # 多模态，可选
+export TELEGRAM_BOT_TOKEN=your-bot-token            # Telegram Bot，可选
 
-# 3. 启动（开发模式）
-./mvnw spring-boot:run
-
-# 或打包后运行（推荐生产环境）
+# 3. 打包运行
 mvn package -DskipTests
 java -jar target/spring-ai-rag-demo-1.0.0.jar
 
@@ -74,24 +85,23 @@ open http://localhost:8080
 
 ## 🤖 Telegram Bot
 
-项目内置了 Telegram Bot 集成，支持通过 Telegram 与 AI 对话。
-
 ### 配置
 
 ```bash
-# 配置 Telegram Bot Token（从 @BotFather 获取）
 export TELEGRAM_BOT_TOKEN=your-bot-token
-
-# 同时配置 DeepSeek Key 启动即可
-export DEEPSEEK_API_KEY=sk-your-deepseek-key-here
+export DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+export QWEN_API_KEY=sk-your-aliyun-bailian-key    # 多模态支持
 java -jar target/spring-ai-rag-demo-1.0.0.jar
 ```
 
-### 技术说明
-- 使用 **TelegramBots 7.10.0**（Long Polling 模式）
-- 消息通过 `OrchestratorService` 路由到对应 Agent
-- 支持 typing 状态指示
-- 60秒超时保护，避免 API 响应慢导致卡死
+### 支持的操作
+
+| 操作 | 说明 | 依赖 |
+|------|------|------|
+| 💬 文字消息 | 多Agent对话 | DeepSeek |
+| 🖼️ 发送图片 | 自动分析图片内容 | Qwen-VL |
+| 🎨 说"画一张..." | AI生成图片 | Qwen-Image |
+| 🎤 发语音消息 | 语音→文字→回复→语音回复 | FunASR+CosyVoice |
 
 ## 📖 使用指南
 
@@ -104,12 +114,7 @@ java -jar target/spring-ai-rag-demo-1.0.0.jar
 | "帮我查一下Spring Boot配置" | 搜索Agent - 知识库检索 |
 | "随便聊聊今天的天气" | 对话Agent - 通用对话 |
 | "128 * 256 等于多少？" | 工具调用 - 计算器 |
-
-### 📄 知识库使用
-1. 点击"知识库"标签页
-2. 上传 `.txt` 或 `.md` 文档
-3. 切换到"对话"标签页提问
-4. 搜索Agent会自动检索知识库内容
+| "画一只在太空中的猫" | 图片生成 |
 
 ## 📡 API接口
 
@@ -149,21 +154,17 @@ Content-Type: application/json
 {"question": "文档中提到了什么内容？"}
 ```
 
-## 🗄️ 数据存储
-
-| 存储 | 位置 | 说明 |
-|------|------|------|
-| 向量库 | `./data/vector-store.json` | InMemoryEmbeddingStore 序列化，重启恢复 |
-| 文档源 | `./docs/` | 启动时自动加载 .txt / .md |
-| 日志 | 控制台 | Spring Boot默认日志 |
-
 ## 🧱 技术栈
 
 | 组件 | 选型 | 版本 |
 |------|------|------|
 | 核心框架 | LangChain4j | 0.35.0 |
-| LLM | DeepSeek Chat | deepseek-chat |
-| 嵌入模型 | DeepSeek Embedding | deepseek-embedding |
+| 文字模型 | DeepSeek Chat | deepseek-chat |
+| 视觉模型 | Qwen-VL (阿里云百炼) | qwen-vl-plus |
+| 图片生成 | Qwen-Image (阿里云百炼) | qwen-image-2.0-pro |
+| 语音识别 | FunASR (阿里云百炼) | fun-asr |
+| 语音合成 | CosyVoice (阿里云百炼) | cosyvoice-v3.5-plus |
+| 嵌入模型 | AllMiniLmL6V2 (本地，免API) | - |
 | 后端框架 | Spring Boot | 3.2.5 |
 | 语言 | Java | 17 |
 | 向量库 | InMemoryEmbeddingStore | JSON文件持久化 |
@@ -183,7 +184,7 @@ src/main/java/com/ragdemo/
 │   ├── ChatAgent.java                # 对话Agent
 │   └── SearchTools.java              # 工具集
 ├── config/
-│   ├── AppConfig.java                # DeepSeek配置
+│   ├── AppConfig.java                # DeepSeek配置 + 本地嵌入模型
 │   └── WebConfig.java                # Web配置
 ├── controller/
 │   ├── ChatController.java           # 聊天API
@@ -191,27 +192,29 @@ src/main/java/com/ragdemo/
 │   └── HomeController.java           # 页面路由
 ├── service/
 │   ├── AgentRegistry.java            # Agent注册中心
-│   ├── OrchestratorService.java      # 编排服务
-│   ├── DocumentService.java          # 文档管理（分块+嵌入+存入）
+│   ├── OrchestratorService.java      # 编排服务（工作流+对话记忆）
+│   ├── DocumentService.java          # 文档管理
 │   ├── VectorStore.java              # 向量库（语义搜索+JSON持久化）
 │   ├── Chunker.java                  # 文档分块工具
-│   └── AppInitializer.java           # 初始化
+│   ├── AppInitializer.java           # 启动初始化
+│   ├── VisionService.java            # 图片理解（Qwen-VL）
+│   ├── SpeechService.java            # 语音服务（FunASR+CosyVoice）
+│   └── ImageGenerationService.java   # 图片生成（Qwen-Image）
 └── telegrambot/
-    └── TelegramBotService.java        # Telegram Bot 集成
+    └── TelegramBotService.java        # Telegram Bot 集成（多模态）
 ```
 
-## 🚀 路线图
+## 🚀 演进路线
 
-- [x] 多Agent路由架构
-- [x] RAG知识库（向量语义搜索）
-- [x] 工具调用（计算/时间/检索）
-- [x] 向量嵌入 + 文档自动分块（DeepSeek Embedding + Chunker）
-- [x] JSON持久化（重启不丢失）
-- [x] Web管理界面
-- [x] Agent工作流编排（多步串行执行 + 结果传递）
-- [x] 多轮对话记忆管理（滑动窗口，保留10条）
-- [x] Telegram Bot 集成
-- [ ] 流式输出（SSE/WebSocket）
+- [x] v1.0 - 基础：多Agent路由 + DeepSeek对话
+- [x] v1.1 - RAG：知识库上传 + 向量语义搜索 + 工具调用
+- [x] v1.2 - 工作流：多步编排 + 对话记忆 + Web界面
+- [x] v1.3 - Telegram Bot：Long Polling接入 + 消息路由
+- [x] v1.4 - 图片理解：Qwen-VL集成，发图即分析
+- [x] v1.5 - 图片生成：Qwen-Image，说"画一张..."即出图
+- [x] v1.6 - 语音对话：FunASR语音识别 + CosyVoice语音合成
+- [x] v1.7 - 本地嵌入：AllMiniLmL6V2取代DeepSeek Embedding，启动更快
+- [ ] v2.0 - 流式输出（SSE/WebSocket）+ 更多LLM支持
 
 ## 📄 License
 
