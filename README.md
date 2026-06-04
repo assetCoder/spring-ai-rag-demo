@@ -216,6 +216,7 @@ src/main/java/com/ragdemo/
 - [x] v1.7 - 本地嵌入：AllMiniLmL6V2取代DeepSeek Embedding，启动更快
 - [x] v1.8 - 多模态记忆：图片分析/语音识别结果注入对话历史，实现跨模态上下文延续
 - [x] v1.9 - 修复图片生成API：改用阿里云百炼 Multimodal Generation 同步接口，修复Qwen-Image 2.0 Pro调用
+- [ ] v1.10 - 上下文优化：长对话窗口压缩、摘要轮转、多轮记忆持久化
 - [ ] v2.0 - 流式输出（SSE/WebSocket）+ 更多LLM支持
 
 ## 📄 License
