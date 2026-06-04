@@ -12,10 +12,13 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.Base64;
+import java.time.Duration;
 
 /**
- * 图片生成服务 - 使用通义万相/千问 Image 模型
+ * 图片生成服务 - 阿里云百炼 Qwen-Image 2.0 Pro
+ * <p>
+ * 使用同步接口（Multimodal Generation）：
+ * POST https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
  */
 @Service
 public class ImageGenerationService {
@@ -24,18 +27,18 @@ public class ImageGenerationService {
 
     private final String apiKey;
     private final String model;
-    private final String apiUrl;
-    private final HttpClient client;
     private final ObjectMapper mapper;
+    private final HttpClient client;
 
     public ImageGenerationService(
             @Value("${image.api.key:${QWEN_API_KEY}}") String apiKey,
             @Value("${image.model:qwen-image-2.0-pro}") String model) {
         this.apiKey = apiKey;
         this.model = model;
-        this.apiUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations";
-        this.client = HttpClient.newHttpClient();
         this.mapper = new ObjectMapper();
+        this.client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .build();
     }
 
     /**
@@ -47,17 +50,34 @@ public class ImageGenerationService {
         String payload = """
         {
             "model": "%s",
-            "prompt": "%s",
-            "n": 1,
-            "size": "1024x1024"
+            "input": {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"text": "%s"}
+                        ]
+                    }
+                ]
+            },
+            "parameters": {
+                "size": "1024*1024",
+                "n": 1,
+                "prompt_extend": true,
+                "watermark": false
+            }
         }
-        """.formatted(model, prompt.replace("\"", "\\\"").replace("\n", " "));
+        """.formatted(model,
+                prompt.replace("\"", "\\\"")
+                        .replace("\n", " ")
+                        .replace("\\", "\\\\"));
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(apiUrl))
+                .uri(URI.create("https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .timeout(Duration.ofSeconds(60))
                 .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -68,30 +88,31 @@ public class ImageGenerationService {
         }
 
         JsonNode root = mapper.readTree(response.body());
+        JsonNode choices = root.path("output").path("choices");
 
-        // 阿里云百炼的返回格式：data[0].b64_json 或 data[0].url
-        JsonNode data = root.path("data").get(0);
-
-        // 先尝试 b64_json
-        String b64Json = data.path("b64_json").asText(null);
-        if (b64Json != null && !b64Json.isBlank()) {
-            log.info("Image generated as base64 ({} chars)", b64Json.length());
-            return Base64.getDecoder().decode(b64Json);
+        if (choices.isArray() && choices.size() > 0) {
+            JsonNode content = choices.get(0).path("message").path("content");
+            if (content.isArray() && content.size() > 0) {
+                String imageUrl = content.get(0).path("image").asText(null);
+                if (imageUrl != null && !imageUrl.isBlank()) {
+                    log.info("Image generated, downloading from URL");
+                    return downloadImage(imageUrl);
+                }
+            }
         }
 
-        // 否则尝试 url
-        String imageUrl = data.path("url").asText(null);
-        if (imageUrl != null && !imageUrl.isBlank()) {
-            log.info("Image generated, downloading from URL");
-            var dlReq = HttpRequest.newBuilder()
-                    .uri(URI.create(imageUrl))
-                    .GET()
-                    .build();
-            var dlResp = client.send(dlReq, HttpResponse.BodyHandlers.ofByteArray());
-            return dlResp.body();
-        }
-
-        log.error("No image data in response: {}", response.body());
+        log.error("No image URL in response: {}", response.body());
         return null;
+    }
+
+    private byte[] downloadImage(String url) throws IOException, InterruptedException {
+        HttpRequest dlReq = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(30))
+                .GET()
+                .build();
+        HttpResponse<byte[]> dlResp = client.send(dlReq, HttpResponse.BodyHandlers.ofByteArray());
+        log.info("Downloaded image: {} bytes", dlResp.body().length);
+        return dlResp.body();
     }
 }

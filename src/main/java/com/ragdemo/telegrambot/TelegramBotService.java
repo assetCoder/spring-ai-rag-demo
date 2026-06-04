@@ -54,6 +54,9 @@ public class TelegramBotService implements LongPollingSingleThreadUpdateConsumer
     private TelegramClient client;
     private final HttpClient httpClient;
 
+    // 用于多模态结果注入记忆，注意这不是线程安全的
+    // 但在单线程 long polling + 顺序处理的模式下够用
+
     public TelegramBotService(OrchestratorService orchestrator,
                               VisionService visionService,
                               SpeechService speechService,
@@ -183,18 +186,40 @@ public class TelegramBotService implements LongPollingSingleThreadUpdateConsumer
             log.info("Downloaded photo: {} bytes", imageBytes.length);
 
             // 用 Vision API 分析
-            String prompt = caption != null && !caption.isBlank()
-                    ? "请描述这张图片。用户附言：" + caption
-                    : "请详细描述这张图片的内容";
-            String visionReply = visionService.analyzeImageBase64(imageBytes, prompt);
+            String userPrompt = caption != null && !caption.isBlank() ? caption : "请详细描述这张图片的内容";
+            String visionResult = visionService.analyzeImageBase64(imageBytes, userPrompt);
 
-            sendText(chatId, "🔍 **图片分析结果：**\n\n" + visionReply);
-            log.info("Sent vision reply to {}", chatId);
+            // 注入记忆：把"看到图片"这件事记入对话历史
+            injectImageMemory(userPrompt, visionResult);
+
+            // 用 DeepSeek 基于上下文生成回复（如果用户还写了文字，结合上下文回复）
+            String textToSend = "🔍 **图片分析结果：**\n\n" + visionResult;
+            if (caption != null && !caption.isBlank()) {
+                // 用户附带了文字说明 → 结合上下文，让 DeepSeek 生成更自然的回复
+                sendTyping(chatId);
+                String contextualReply = callOrchestratorWithTimeout(
+                        "（我刚刚发了一张图片）" + caption +
+                        "\n\n图片分析结果：\n" + visionResult);
+                textToSend = contextualReply;
+            }
+
+            sendText(chatId, textToSend);
+            log.info("Sent vision + contextual reply to {}", chatId);
 
         } catch (Exception e) {
             log.error("Error handling photo from {}", chatId, e);
             sendText(chatId, "抱歉，分析图片时出错了：" + e.getMessage());
         }
+    }
+
+    /**
+     * 把图片分析结果注入对话记忆
+     */
+    private void injectImageMemory(String userText, String visionResult) {
+        orchestrator.injectMemory(
+                "[用户上传了一张图片]" + (userText != null ? " 用户说: " + userText : ""),
+                "[AI分析了图片] " + visionResult
+        );
     }
 
     // ======== 语音消息处理 ========
@@ -216,7 +241,12 @@ public class TelegramBotService implements LongPollingSingleThreadUpdateConsumer
                 return;
             }
 
-            // 2. 文字回复
+            // 2. 注入记忆并让 DeepSeek 基于上下文回复
+            orchestrator.injectMemory(
+                    "[用户发送了语音消息] 识别结果: " + transcript,
+                    null  // AI还没回复，回复由下面的 callOrchestratorWithTimeout 注入
+            );
+
             String reply = callOrchestratorWithTimeout(transcript);
 
             // 3. 文字转语音回复
@@ -224,7 +254,7 @@ public class TelegramBotService implements LongPollingSingleThreadUpdateConsumer
             byte[] ttsAudio = speechService.textToSpeech(reply);
 
             if (ttsAudio != null) {
-                // 发送语音消息 - 用 InputStream
+                // 发送语音消息
                 InputFile voiceFile = new InputFile()
                         .setMedia(new java.io.ByteArrayInputStream(ttsAudio), "reply.ogg");
                 client.execute(SendVoice.builder()

@@ -117,6 +117,20 @@ public class OrchestratorService {
     }
 
     /**
+     * 注入外部记忆（用于图片分析/语音识别等非文字交互）
+     * 让后续对话能感知之前的多模态交互
+     *
+     * @param userMessage  用户行为描述（不可为null）
+     * @param aiMessage    AI回复（为null时只记用户行为）
+     */
+    public void injectMemory(String userMessage, String aiMessage) {
+        addToHistory(new UserMessage(userMessage));
+        if (aiMessage != null) {
+            addToHistory(new AiMessage(aiMessage));
+        }
+    }
+
+    /**
      * 执行单步Agent
      */
     private String executeStep(String agent, String input) {

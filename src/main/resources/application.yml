@@ -13,6 +13,7 @@ rag:
 telegram:
   bot:
     token: ${TELEGRAM_BOT_TOKEN}
+    username: localRagDemoBot
 
 # 多模态配置 - 通义千问 Qwen-VL
 vision:
