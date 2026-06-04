@@ -25,7 +25,8 @@ public class AppConfig {
                 .baseUrl(BASE_URL)
                 .modelName("deepseek-chat")
                 .temperature(0.7)
-                .timeout(Duration.ofSeconds(60))
+                .timeout(Duration.ofSeconds(120))
+                .maxRetries(2)
                 .build();
     }
 

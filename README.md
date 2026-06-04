@@ -61,12 +61,37 @@ cd spring-ai-rag-demo
 # 2. 配置API Key
 export DEEPSEEK_API_KEY=sk-your-deepseek-api-key
 
-# 3. 启动（自动下载依赖）
-mvn spring-boot:run
+# 3. 启动（开发模式）
+./mvnw spring-boot:run
+
+# 或打包后运行（推荐生产环境）
+mvn package -DskipTests
+java -jar target/spring-ai-rag-demo-1.0.0.jar
 
 # 4. 访问
 open http://localhost:8080
 ```
+
+## 🤖 Telegram Bot
+
+项目内置了 Telegram Bot 集成，支持通过 Telegram 与 AI 对话。
+
+### 配置
+
+```bash
+# 配置 Telegram Bot Token（从 @BotFather 获取）
+export TELEGRAM_BOT_TOKEN=your-bot-token
+
+# 同时配置 DeepSeek Key 启动即可
+export DEEPSEEK_API_KEY=sk-your-deepseek-key-here
+java -jar target/spring-ai-rag-demo-1.0.0.jar
+```
+
+### 技术说明
+- 使用 **TelegramBots 7.10.0**（Long Polling 模式）
+- 消息通过 `OrchestratorService` 路由到对应 Agent
+- 支持 typing 状态指示
+- 60秒超时保护，避免 API 响应慢导致卡死
 
 ## 📖 使用指南
 
@@ -164,13 +189,15 @@ src/main/java/com/ragdemo/
 │   ├── ChatController.java           # 聊天API
 │   ├── RagController.java            # 知识库API
 │   └── HomeController.java           # 页面路由
-└── service/
-    ├── AgentRegistry.java            # Agent注册中心
-    ├── OrchestratorService.java      # 编排服务
-    ├── DocumentService.java          # 文档管理（分块+嵌入+存入）
-    ├── VectorStore.java              # 向量库（语义搜索+JSON持久化）
-    ├── Chunker.java                  # 文档分块工具
-    └── AppInitializer.java           # 初始化
+├── service/
+│   ├── AgentRegistry.java            # Agent注册中心
+│   ├── OrchestratorService.java      # 编排服务
+│   ├── DocumentService.java          # 文档管理（分块+嵌入+存入）
+│   ├── VectorStore.java              # 向量库（语义搜索+JSON持久化）
+│   ├── Chunker.java                  # 文档分块工具
+│   └── AppInitializer.java           # 初始化
+└── telegrambot/
+    └── TelegramBotService.java        # Telegram Bot 集成
 ```
 
 ## 🚀 路线图
@@ -183,6 +210,7 @@ src/main/java/com/ragdemo/
 - [x] Web管理界面
 - [x] Agent工作流编排（多步串行执行 + 结果传递）
 - [x] 多轮对话记忆管理（滑动窗口，保留10条）
+- [x] Telegram Bot 集成
 - [ ] 流式输出（SSE/WebSocket）
 
 ## 📄 License

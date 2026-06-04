@@ -1,6 +1,15 @@
 server:
   port: 8080
 
+spring:
+  datasource:
+    url: jdbc:sqlite:${user.dir}/data/rag.db
+    driver-class-name: org.sqlite.JDBC
+
 rag:
   docs-dir: ./docs
   store-path: ./data/vector-store.json
+
+telegram:
+  bot:
+    token: ${TELEGRAM_BOT_TOKEN}
